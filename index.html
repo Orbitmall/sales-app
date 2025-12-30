@@ -1,187 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Sales App</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WooCommerce Categories & Products</title>
 <style>
-  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f5f6f8}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  h1{font-size:20px;margin:0}
-  .btn{background:#ff6600;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
-  .ghost{background:#ddd;color:#333}
-  .grid{display:flex;flex-wrap:wrap;gap:12px}
-  .card{background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:10px;width:calc(50% - 12px);box-sizing:border-box}
-  .card img{width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px;cursor:pointer}
-  .product-card{width:calc(50% - 12px)}
-  #cartCount{background:#222;color:#fff;font-size:12px;padding:4px 8px;border-radius:999px;margin-left:8px}
-  #main{min-height:60vh}
-  #cartView{display:none;background:#fff;padding:12px;border-radius:8px;border:1px solid #ddd;margin-top:12px}
-  .small{font-size:13px;color:#666}
-  .return-shop{
-    position:fixed;right:16px;bottom:18px;background:#007bff;color:#fff;
-    padding:10px 12px;border-radius:8px;cursor:pointer;z-index:9999;
-  }
-  @media(min-width:900px){ .card,.product-card{width:calc(25% - 12px)} }
-  #productModal{
-    display:none;position:fixed;inset:0;
-    background:rgba(0,0,0,.6);
-    z-index:10000;justify-content:center;align-items:center;
-  }
-  #productModalContent{
-    background:#fff;width:90%;max-width:420px;
-    padding:16px;border-radius:10px;
-    max-height:80vh;overflow:auto;
-  }
-  #productModalContent img{width:100%;border-radius:8px;margin-bottom:10px}
+  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f6f8; }
+  h1 { text-align: center; }
+  .category { margin-bottom: 30px; }
+  .category h2 { background: #0073aa; color: #fff; padding: 10px; margin: 0; cursor: pointer; }
+  .products { display: flex; flex-wrap: wrap; gap: 15px; padding: 10px; display: none; }
+  .product { border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; width: 200px; cursor: pointer; }
+  .product img { max-width: 100%; border-radius: 5px; }
+  .product-description { display: none; margin-top: 10px; font-size: 14px; color: #333; }
 </style>
 </head>
 <body>
-
-<header>
-  <h1>Sales App</h1>
-  <div>
-    <button class="btn" onclick="showCategories()">Shop</button>
-    <button class="btn ghost" onclick="showCart()">Cart <span id="cartCount">0</span></button>
-  </div>
-</header>
-
-<div id="main"></div>
-
-<div id="cartView">
-  <h3>Your Cart</h3>
-  <div id="cartItems"></div>
-  <button class="btn full-width" onclick="proceedToCheckout()">Proceed to Checkout</button>
-</div>
-
-<button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
-
-<div id="productModal">
-  <div id="productModalContent">
-    <h3 id="modalTitle"></h3>
-    <img id="modalImage">
-    <div id="modalDescription" class="small"></div>
-    <div style="margin-top:12px;text-align:right">
-      <button class="btn ghost" onclick="closeModal()">Close</button>
-    </div>
-  </div>
-</div>
+<h1>Shop Categories & Products</h1>
+<div id="categories"></div>
 
 <script>
-const SITE = "https://ross.lrbcloud.co.za";
-const API_PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
-const CART_KEY = "app24_local_cart_v1";
-let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
-const productCache = {};
+// Replace with your WooCommerce API endpoint
+const API_URL = 'https://ross.lrbcloud.co.za/wp-json/wc/v3/ams-categories';
 
-function currency(v){return v?parseFloat(v).toFixed(2):"-";}
-function saveCart(){localStorage.setItem(CART_KEY,JSON.stringify(cart)); updateCartCount();}
-function updateCartCount(){document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.quantity,0);}
-
-async function api(path){
+// Fetch categories from API
+async function loadCategories() {
   try {
-    const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
-    if(!res.ok) throw new Error("API error "+res.status);
-    return await res.json();
-  } catch(e){
-    console.error("API fetch failed:", e);
-    throw e;
-  }
-}
+    const res = await fetch(API_URL);
+    const categories = await res.json();
 
-async function showCategories(){
-  const mainDiv = document.getElementById("main");
-  mainDiv.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  const catGrid = document.getElementById("catGrid");
-  try{
-    const cats = await api("/products/categories?per_page=100");
-    if(!Array.isArray(cats) || !cats.length) {
-      catGrid.innerHTML = "<p>No categories found.</p>"; 
-      return;
-    }
-    catGrid.innerHTML = "";
-    cats.forEach(c=>{
-      if(c.count>0){
-        const imgSrc = c.image?.src || "";
-        const nameSafe = c.name.replace(/'/g,"\\'");
-        catGrid.innerHTML += `
-          <div class="card">
-            <img src="${imgSrc}" alt="${c.name}">
-            <strong>${c.name}</strong>
-            <div class="small">Products: ${c.count}</div>
-            <button class="btn" onclick="showProducts(${c.id},'${nameSafe}')">View</button>
-          </div>`;
-      }
+    const container = document.getElementById('categories');
+    container.innerHTML = '';
+
+    categories.forEach(category => {
+      const catDiv = document.createElement('div');
+      catDiv.className = 'category';
+
+      const catTitle = document.createElement('h2');
+      catTitle.textContent = category.name;
+      catDiv.appendChild(catTitle);
+
+      const productsDiv = document.createElement('div');
+      productsDiv.className = 'products';
+      catDiv.appendChild(productsDiv);
+
+      // Show/hide products when category clicked
+      catTitle.addEventListener('click', () => {
+        productsDiv.style.display = productsDiv.style.display === 'flex' ? 'none' : 'flex';
+      });
+
+      container.appendChild(catDiv);
+
+      // Load products for this category
+      loadProducts(category.id, productsDiv);
     });
-  } catch(e){
-    catGrid.innerHTML = "<p>Error loading categories.</p>";
+  } catch (err) {
+    console.error('Error loading categories:', err);
+    document.getElementById('categories').innerHTML = '<p style="color:red;">Error loading categories.</p>';
   }
 }
 
-async function showProducts(id,name){
-  const mainDiv = document.getElementById("main");
-  mainDiv.innerHTML = `<h2>${name}</h2><div class='grid' id='prodGrid'>Loading...</div>`;
-  const prodGrid = document.getElementById("prodGrid");
-  try{
-    const prods = await api(`/products?category=${id}&per_page=100`);
-    if(!Array.isArray(prods) || !prods.length){
-      prodGrid.innerHTML = "<p>No products found.</p>";
-      return;
-    }
-    prodGrid.innerHTML = "";
-    prods.forEach(p=>{
-      productCache[p.id] = p;
-      const imgSrc = (p.images && p.images[0]?.src) || "";
-      const nameSafe = p.name.replace(/'/g,"\\'");
-      prodGrid.innerHTML += `
-        <div class="card product-card">
-          <img src="${imgSrc}" alt="${p.name}" onclick="openModal(${p.id})">
-          <strong>${p.name}</strong>
-          <div class="small">R ${currency(p.price)}</div>
-          <button class="btn" onclick="addToCart(${p.id},'${nameSafe}',${p.price||0})">Add to Cart</button>
-        </div>`;
+// Fetch products for a category
+async function loadProducts(categoryId, container) {
+  try {
+    const res = await fetch(`https://ross.lrbcloud.co.za/wp-json/wc/v3/products?category=${categoryId}`);
+    const products = await res.json();
+
+    products.forEach(product => {
+      const prodDiv = document.createElement('div');
+      prodDiv.className = 'product';
+
+      const img = document.createElement('img');
+      img.src = product.images?.[0]?.src || '';
+      prodDiv.appendChild(img);
+
+      const name = document.createElement('div');
+      name.textContent = product.name;
+      name.style.fontWeight = 'bold';
+      name.style.marginTop = '5px';
+      prodDiv.appendChild(name);
+
+      const desc = document.createElement('div');
+      desc.className = 'product-description';
+      desc.innerHTML = product.description || 'No description';
+      prodDiv.appendChild(desc);
+
+      // Toggle product description on click
+      prodDiv.addEventListener('click', () => {
+        desc.style.display = desc.style.display === 'block' ? 'none' : 'block';
+      });
+
+      container.appendChild(prodDiv);
     });
-  } catch(e){
-    prodGrid.innerHTML = "<p>Error loading products.</p>";
+  } catch (err) {
+    console.error('Error loading products:', err);
+    container.innerHTML = '<p style="color:red;">Error loading products.</p>';
   }
 }
 
-function openModal(id){
-  const p = productCache[id];
-  if(!p) return;
-  document.getElementById("modalTitle").innerText = p.name;
-  document.getElementById("modalImage").src = p.images?.[0]?.src || "";
-  document.getElementById("modalDescription").innerHTML = p.description || "No description available.";
-  document.getElementById("productModal").style.display = "flex";
-}
-
-function closeModal(){document.getElementById("productModal").style.display = "none";}
-function addToCart(id,name,price){
-  const e = cart.find(i=>i.id===id);
-  e ? e.quantity++ : cart.push({id,name,price,quantity:1});
-  saveCart();
-}
-function showCart(){
-  document.getElementById("main").innerHTML = "";
-  const cartView = document.getElementById("cartView");
-  cartView.style.display = "block";
-  document.getElementById("cartItems").innerHTML = cart.length ? 
-    cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("") : "<p>Your cart is empty.</p>";
-}
-function proceedToCheckout(){
-  if(!cart.length) return;
-  const ids = cart.map(i=>i.id).join(",");
-  cart=[]; saveCart();
-  location.href = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
-}
-
-window.addEventListener("DOMContentLoaded", ()=>{
-  updateCartCount();
-  showCategories();
-});
+// Load everything
+loadCategories();
 </script>
-
 </body>
 </html>
-
 
