@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <title>Sales App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#f5f6f8 }
 header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
@@ -13,13 +12,20 @@ h1 { font-size:20px; margin:0 }
 .ghost { background:#ddd; color:#333 }
 .grid { display:flex; flex-wrap:wrap; gap:12px }
 .card { background:#fff; border:1px solid #e3e3e3; border-radius:8px; padding:10px; width:calc(50% - 12px) }
-.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px }
+.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer }
 #cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
 #cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd }
 .cart-line { display:flex; gap:8px; border-bottom:1px solid #eee; padding:8px 0 }
 .cart-line img { width:70px; height:70px; object-fit:cover; border-radius:6px }
 .return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px }
 @media(min-width:900px){ .card{width:calc(25% - 12px)} }
+.description-popup {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:#fff; padding:20px; border-radius:8px; max-width:400px; box-shadow:0 4px 15px rgba(0,0,0,0.3);
+  z-index:9999; display:none;
+}
+.description-popup h3 { margin-top:0 }
+.description-popup button { margin-top:12px; }
 </style>
 </head>
 
@@ -43,59 +49,68 @@ h1 { font-size:20px; margin:0 }
 
 <button class="return-shop" onclick="showCategories()">🛍️ Shop</button>
 
-<script>
-/* CONFIG — TESTING ONLY */
-const SITE = "https://ross.lrbcloud.co.za";
-const CK = "ck_92b12d99d78f03cfacce9c165329a7db71070d35";
-const CS = "cs_4fae4f2321a41bddd31718c9add6b323c0fdc800";
-const API = SITE + "/wp-json/wc/v3";
+<div class="description-popup" id="descPopup">
+  <h3 id="descTitle"></h3>
+  <p id="descText"></p>
+  <button class="btn" onclick="closeDesc()">Close</button>
+</div>
 
-/* CART */
+<script>
 let cart = JSON.parse(localStorage.getItem("cart") || "[]");
 
 function saveCart(){
   localStorage.setItem("cart", JSON.stringify(cart));
-  document.getElementById("cartCount").innerText =
-    cart.reduce((s,i)=>s+i.qty,0);
+  document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.qty,0);
 }
 
 function money(v){ return "R " + Number(v||0).toFixed(2); }
 
-/* LOAD CATEGORIES */
+/* CATEGORIES */
 async function showCategories(){
   document.getElementById("cartView").style.display="none";
   const main = document.getElementById("main");
   main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
 
-  const r = await fetch(`${API}/products/categories?consumer_key=${CK}&consumer_secret=${CS}`);
+  const r = await fetch("/api/categories");
   const cats = await r.json();
   document.getElementById("cats").innerHTML = cats
     .filter(c=>c.count>0)
     .map(c=>`
       <div class="card">
-        <img src="${c.image?.src||""}">
+        <img src="${c.image?.src||''}" onclick="alert('Category: ${c.name}')">
         <strong>${c.name}</strong>
         <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
       </div>
     `).join("");
 }
 
-/* LOAD PRODUCTS */
+/* PRODUCTS */
 async function showProducts(id,name){
   document.getElementById("cartView").style.display="none";
   const main = document.getElementById("main");
   main.innerHTML = `<h2>${name}</h2><div class="grid" id="prods">Loading...</div>`;
 
-  const r = await fetch(`${API}/products?category=${id}&consumer_key=${CK}&consumer_secret=${CS}`);
+  const r = await fetch(`/api/products?category=${id}`);
   const prods = await r.json();
   document.getElementById("prods").innerHTML = prods.map(p=>`
     <div class="card">
-      <img src="${p.images[0]?.src||""}">
+      <img src="${p.images[0]?.src||''}" onclick="showDesc('${p.name}','${p.description.replace(/'/g,'\\\'')}')">
       <strong>${p.name}</strong>
       <div>${money(p.price)}</div>
       <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
     </div>
   `).join("");
+}
+
+/* PRODUCT DESCRIPTION */
+function showDesc(name,desc){
+  document.getElementById("descTitle").innerText = name;
+  document.getElementById("descText").innerHTML = desc;
+  document.getElementById("descPopup").style.display = "block";
+}
+
+function closeDesc(){
+  document.getElementById("descPopup").style.display = "none";
 }
 
 /* CART */
@@ -119,7 +134,7 @@ function checkout(){
   if(!cart.length) return alert("Cart empty");
   const ids = cart.map(i=>i.id).join(",");
   cart=[]; saveCart();
-  location.href = SITE + "/cart/?add-to-cart=" + ids;
+  location.href = "https://ross.lrbcloud.co.za/cart/?add-to-cart=" + ids;
 }
 
 saveCart();
@@ -128,4 +143,3 @@ showCategories();
 
 </body>
 </html>
-
