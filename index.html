@@ -134,23 +134,26 @@ async function showCategories(){
 async function showProducts(id,name){
   cartView.style.display="none";
   main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid">Loading...</div>`;
-
-  const res=await fetch(`${API_ROOT}/products?category=${id}&per_page=100&consumer_key=${CK}&consumer_secret=${CS}`);
-  const prods=await res.json();
-  prodGrid.innerHTML="";
-
-  prods.forEach(p=>{
-    productCache[p.id] = p; // CACHE PRODUCT
-
-    prodGrid.innerHTML+=`
-    <div class="card product-card">
-      <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
-      <strong>${p.name}</strong>
-      <div class="small">R ${currency(p.price)}</div>
-      <button class="btn" onclick="addToCart(${p.id},'${p.name}',${p.price||0})">Add to Cart</button>
-    </div>`;
-  });
+  const prodGrid = document.getElementById('prodGrid');
+  try {
+    const prods = await api(`/products?category=${id}&per_page=100`);
+    prodGrid.innerHTML="";
+    prods.forEach(p=>{
+      productCache[p.id]=p;
+      prodGrid.innerHTML+=`
+      <div class="card product-card">
+        <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
+        <strong>${p.name}</strong>
+        <div class="small">R ${currency(p.price)}</div>
+        <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price||0})">Add to Cart</button>
+      </div>`;
+    });
+  } catch(e){
+    prodGrid.innerHTML="<p>Error loading products.</p>";
+    console.error(e);
+  }
 }
+
 
 /* PRODUCT MODAL (FAST – NO FETCH) */
 function openModal(id){
@@ -191,3 +194,4 @@ showCategories();
 
 </body>
 </html>
+
