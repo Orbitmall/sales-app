@@ -81,7 +81,6 @@ function updateCartCount(){document.getElementById("cartCount").innerText = cart
 async function api(path){
   try {
     const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
-    console.log("Fetching:", path, res.status);
     if(!res.ok) throw new Error("API error "+res.status);
     return await res.json();
   } catch(e){
@@ -96,11 +95,14 @@ async function showCategories(){
   const catGrid = document.getElementById("catGrid");
   try{
     const cats = await api("/products/categories?per_page=100");
-    console.log("Categories:", cats);
+    if(!Array.isArray(cats) || !cats.length) {
+      catGrid.innerHTML = "<p>No categories found.</p>"; 
+      return;
+    }
     catGrid.innerHTML = "";
     cats.forEach(c=>{
       if(c.count>0){
-        const imgSrc = (c.image && c.image.src)? c.image.src : "";
+        const imgSrc = c.image?.src || "";
         const nameSafe = c.name.replace(/'/g,"\\'");
         catGrid.innerHTML += `
           <div class="card">
@@ -122,18 +124,21 @@ async function showProducts(id,name){
   const prodGrid = document.getElementById("prodGrid");
   try{
     const prods = await api(`/products?category=${id}&per_page=100`);
-    console.log("Products:", prods);
+    if(!Array.isArray(prods) || !prods.length){
+      prodGrid.innerHTML = "<p>No products found.</p>";
+      return;
+    }
     prodGrid.innerHTML = "";
     prods.forEach(p=>{
       productCache[p.id] = p;
-      const imgSrc = (p.images && p.images[0] && p.images[0].src)? p.images[0].src : "";
+      const imgSrc = (p.images && p.images[0]?.src) || "";
       const nameSafe = p.name.replace(/'/g,"\\'");
       prodGrid.innerHTML += `
         <div class="card product-card">
           <img src="${imgSrc}" alt="${p.name}" onclick="openModal(${p.id})">
           <strong>${p.name}</strong>
           <div class="small">R ${currency(p.price)}</div>
-          <button class="btn" onclick="addToCart(${p.id},'${nameSafe}',${p.price || 0})">Add to Cart</button>
+          <button class="btn" onclick="addToCart(${p.id},'${nameSafe}',${p.price||0})">Add to Cart</button>
         </div>`;
     });
   } catch(e){
@@ -145,19 +150,17 @@ function openModal(id){
   const p = productCache[id];
   if(!p) return;
   document.getElementById("modalTitle").innerText = p.name;
-  document.getElementById("modalImage").src = (p.images && p.images[0] && p.images[0].src)? p.images[0].src : "";
+  document.getElementById("modalImage").src = p.images?.[0]?.src || "";
   document.getElementById("modalDescription").innerHTML = p.description || "No description available.";
   document.getElementById("productModal").style.display = "flex";
 }
 
 function closeModal(){document.getElementById("productModal").style.display = "none";}
-
 function addToCart(id,name,price){
   const e = cart.find(i=>i.id===id);
   e ? e.quantity++ : cart.push({id,name,price,quantity:1});
   saveCart();
 }
-
 function showCart(){
   document.getElementById("main").innerHTML = "";
   const cartView = document.getElementById("cartView");
@@ -165,7 +168,6 @@ function showCart(){
   document.getElementById("cartItems").innerHTML = cart.length ? 
     cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("") : "<p>Your cart is empty.</p>";
 }
-
 function proceedToCheckout(){
   if(!cart.length) return;
   const ids = cart.map(i=>i.id).join(",");
@@ -173,7 +175,6 @@ function proceedToCheckout(){
   location.href = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
 }
 
-/* INIT AFTER DOM LOAD */
 window.addEventListener("DOMContentLoaded", ()=>{
   updateCartCount();
   showCategories();
