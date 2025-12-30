@@ -76,16 +76,17 @@ async function showCategories(){
   const main = document.getElementById("main");
   main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
 
-  const r = await fetch("/api/categories"); // proxy endpoint
+  const r = await fetch("/api/categories");
   const cats = await r.json();
-  const html = cats.filter(c=>c.count>0).map(c=>`
+  document.getElementById("cats").innerHTML = cats
+    .filter(c=>c.count>0)
+    .map(c=>`
       <div class="card">
         <img src="${c.image?.src||''}" onclick="alert('Category: ${c.name}')">
         <strong>${c.name}</strong>
         <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
       </div>
     `).join("");
-  document.getElementById("cats").innerHTML = html;
 }
 
 /* PRODUCTS */
@@ -94,29 +95,23 @@ async function showProducts(id,name){
   const main = document.getElementById("main");
   main.innerHTML = `<h2>${name}</h2><div class="grid" id="prods">Loading...</div>`;
 
-  const r = await fetch(`/api/products?category=${id}`); // proxy endpoint
+  const r = await fetch(`/api/products?category=${id}`);
   const prods = await r.json();
-
-  const html = prods.map(p=>`
+  document.getElementById("prods").innerHTML = prods.map(p=>`
     <div class="card">
-      <img src="${p.images[0]?.src||''}" 
-           data-name="${p.name}" 
-           data-img="${p.images[0]?.src||''}" 
-           data-desc="${p.description.replace(/"/g,'&quot;')}" 
-           onclick="showDescFromData(this)">
+      <img src="${p.images[0]?.src||''}" onclick="showDesc('${p.name}','${p.images[0]?.src||''}','${p.description.replace(/'/g,'\\\'')}')">
       <strong>${p.name}</strong>
       <div>${money(p.price)}</div>
       <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
     </div>
   `).join("");
-  document.getElementById("prods").innerHTML = html;
 }
 
-/* SHOW DESCRIPTION from dataset */
-function showDescFromData(el){
-  document.getElementById("descTitle").innerText = el.dataset.name;
-  document.getElementById("descImage").src = el.dataset.img;
-  document.getElementById("descText").innerHTML = el.dataset.desc;
+/* SHOW DESCRIPTION */
+function showDesc(name, img, desc){
+  document.getElementById("descTitle").innerText = name;
+  document.getElementById("descImage").src = img;
+  document.getElementById("descText").innerHTML = desc;
   document.getElementById("descPopup").style.display = "block";
 }
 
