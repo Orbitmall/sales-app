@@ -73,12 +73,6 @@
 </div>
 
 <script>
-/*
-  🔒 SAFE CONFIG
-  This endpoint must exist server-side
-  Example:
-  https://yourdomain.com/wc-proxy?path=/products
-*/
 const SITE = "https://ross.lrbcloud.co.za";
 const API_PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
 
@@ -103,37 +97,49 @@ async function api(path){
 async function showCategories(){
   cartView.style.display="none";
   main.innerHTML="<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  const cats = await api("/products/categories?per_page=100");
-  catGrid.innerHTML="";
-  cats.forEach(c=>{
-    if(c.count>0){
-      catGrid.innerHTML+=`
-      <div class="card">
-        <img src="${c.image?.src||""}">
-        <strong>${c.name}</strong>
-        <div class="small">Products: ${c.count}</div>
-        <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
-      </div>`;
-    }
-  });
+  const catGrid = document.getElementById('catGrid');
+  try {
+    const cats = await api("/products/categories?per_page=100");
+    catGrid.innerHTML="";
+    cats.forEach(c=>{
+      if(c.count>0){
+        catGrid.innerHTML+=`
+        <div class="card">
+          <img src="${c.image?.src||""}">
+          <strong>${c.name}</strong>
+          <div class="small">Products: ${c.count}</div>
+          <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
+        </div>`;
+      }
+    });
+  } catch(e){
+    catGrid.innerHTML="<p>Error loading categories.</p>";
+    console.error(e);
+  }
 }
 
 /* PRODUCTS */
 async function showProducts(id,name){
   cartView.style.display="none";
   main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid">Loading...</div>`;
-  const prods = await api(`/products?category=${id}&per_page=100`);
-  prodGrid.innerHTML="";
-  prods.forEach(p=>{
-    productCache[p.id]=p;
-    prodGrid.innerHTML+=`
-    <div class="card product-card">
-      <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
-      <strong>${p.name}</strong>
-      <div class="small">R ${currency(p.price)}</div>
-      <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price||0})">Add to Cart</button>
-    </div>`;
-  });
+  const prodGrid = document.getElementById('prodGrid');
+  try {
+    const prods = await api(`/products?category=${id}&per_page=100`);
+    prodGrid.innerHTML="";
+    prods.forEach(p=>{
+      productCache[p.id]=p;
+      prodGrid.innerHTML+=`
+      <div class="card product-card">
+        <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
+        <strong>${p.name}</strong>
+        <div class="small">R ${currency(p.price)}</div>
+        <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price||0})">Add to Cart</button>
+      </div>`;
+    });
+  } catch(e){
+    prodGrid.innerHTML="<p>Error loading products.</p>";
+    console.error(e);
+  }
 }
 
 /* MODAL */
