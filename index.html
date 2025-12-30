@@ -35,7 +35,6 @@
     padding:16px;border-radius:10px;
     max-height:80vh;overflow:auto;
   }
-  #productModalContent img{width:100%;border-radius:8px;margin-bottom:10px}
 </style>
 </head>
 
@@ -54,7 +53,6 @@
 <div id="cartView">
   <h3>Your Cart</h3>
   <div id="cartItems"></div>
-  <button class="btn full-width" onclick="proceedToCheckout()">Proceed to Checkout</button>
 </div>
 
 <button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
@@ -64,9 +62,7 @@
     <h3 id="modalTitle"></h3>
     <img id="modalImage">
     <div id="modalDescription" class="small"></div>
-    <div style="margin-top:12px;text-align:right">
-      <button class="btn ghost" onclick="closeModal()">Close</button>
-    </div>
+    <button class="btn ghost" onclick="closeModal()">Close</button>
   </div>
 </div>
 
@@ -76,92 +72,93 @@ const SITE = "https://ross.lrbcloud.co.za";
 const API_PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
 
 /* STATE */
-const CART_KEY = "app24_local_cart_v1";
-let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
-const productCache = {};
+let cart=[];
+const productCache={};
 
 /* UTIL */
 function currency(v){return v?parseFloat(v).toFixed(2):"-";}
-function saveCart(){localStorage.setItem(CART_KEY,JSON.stringify(cart));updateCartCount();}
 function updateCartCount(){cartCount.innerText=cart.reduce((s,i)=>s+i.quantity,0);}
 
-/* ✅ FIXED API CALL */
-async function api(path){
-  const cleanPath = path.replace(/^\/+/,''); // 🔥 FIX
-  const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(cleanPath)}`);
-  if(!res.ok) throw new Error("API error");
-  return res.json();
+/* 🔥 PROXY AUTO-DETECT */
+async function api(endpoint){
+  const clean = endpoint.replace(/^\/+/,'');
+  const tries = [
+    `${API_PROXY}?path=${encodeURIComponent(clean)}`,
+    `${API_PROXY}?endpoint=${encodeURIComponent(clean)}`,
+    `${API_PROXY}/${clean}`
+  ];
+
+  for(const url of tries){
+    try{
+      const res = await fetch(url);
+      if(res.ok){
+        const data = await res.json();
+        if(Array.isArray(data) || typeof data === "object") return data;
+      }
+    }catch(e){}
+  }
+
+  throw new Error("Proxy not responding. Check Worker config.");
 }
 
 /* CATEGORIES */
 async function showCategories(){
   cartView.style.display="none";
-  main.innerHTML="<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  const cats = await api("products/categories?per_page=100");
-  catGrid.innerHTML="";
-  cats.forEach(c=>{
-    if(c.count>0){
-      catGrid.innerHTML+=`
-      <div class="card">
-        <img src="${c.image?.src||""}">
-        <strong>${c.name}</strong>
-        <div class="small">Products: ${c.count}</div>
-        <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
-      </div>`;
-    }
-  });
+  main.innerHTML="<h2>Categories</h2><p>Loading…</p>";
+
+  try{
+    const cats = await api("products/categories?per_page=100");
+    main.innerHTML="<h2>Categories</h2><div class='grid' id='catGrid'></div>";
+
+    cats.forEach(c=>{
+      if(c.count>0){
+        catGrid.innerHTML+=`
+        <div class="card">
+          <img src="${c.image?.src||""}">
+          <strong>${c.name}</strong>
+          <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
+        </div>`;
+      }
+    });
+  }catch(err){
+    main.innerHTML="<p style='color:red'>❌ Proxy error. Check Cloudflare Worker.</p>";
+    console.error(err);
+  }
 }
 
 /* PRODUCTS */
 async function showProducts(id,name){
-  cartView.style.display="none";
-  main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid">Loading...</div>`;
-  const prods = await api(`products?category=${id}&per_page=100`);
-  prodGrid.innerHTML="";
-  prods.forEach(p=>{
-    productCache[p.id]=p;
-    prodGrid.innerHTML+=`
-    <div class="card product-card">
-      <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
-      <strong>${p.name}</strong>
-      <div class="small">R ${currency(p.price)}</div>
-      <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price||0})">Add to Cart</button>
-    </div>`;
-  });
+  main.innerHTML=`<h2>${name}</h2><p>Loading…</p>`;
+
+  try{
+    const prods = await api(`products?category=${id}&per_page=100`);
+    main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid"></div>`;
+
+    prods.forEach(p=>{
+      productCache[p.id]=p;
+      prodGrid.innerHTML+=`
+      <div class="card product-card">
+        <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
+        <strong>${p.name}</strong>
+        <div class="small">R ${currency(p.price)}</div>
+      </div>`;
+    });
+  }catch(err){
+    main.innerHTML="<p style='color:red'>❌ Failed to load products.</p>";
+    console.error(err);
+  }
 }
 
 /* MODAL */
 function openModal(id){
   const p=productCache[id];
-  if(!p) return;
+  if(!p)return;
   modalTitle.innerText=p.name;
   modalImage.src=p.images[0]?.src||"";
-  modalDescription.innerHTML=p.description||"No description available.";
+  modalDescription.innerHTML=p.description||"";
   productModal.style.display="flex";
 }
 function closeModal(){productModal.style.display="none";}
-
-/* CART */
-function addToCart(id,name,price){
-  const e=cart.find(i=>i.id===id);
-  e?e.quantity++:cart.push({id,name,price,quantity:1});
-  saveCart();
-}
-
-function showCart(){
-  main.innerHTML="";
-  cartView.style.display="block";
-  cartItems.innerHTML=cart.length
-    ? cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("")
-    : "<p>Your cart is empty.</p>";
-}
-
-function proceedToCheckout(){
-  if(!cart.length) return;
-  const ids=cart.map(i=>i.id).join(",");
-  cart=[]; saveCart();
-  window.location.href=`${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
-}
 
 /* INIT */
 updateCartCount();
