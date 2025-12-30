@@ -5,28 +5,43 @@
 <title>Sales App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#f5f6f8 }
-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
-h1 { font-size:20px; margin:0 }
-.btn { background:#ff6600; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
-.ghost { background:#ddd; color:#333 }
-.grid { display:flex; flex-wrap:wrap; gap:12px }
-.card { background:#fff; border:1px solid #e3e3e3; border-radius:8px; padding:10px; width:calc(50% - 12px) }
-.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer }
-#cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
-#cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd }
-.return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px }
+body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f5f6f8}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+h1{font-size:20px;margin:0}
+.btn{background:#ff6600;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+.ghost{background:#ddd;color:#333}
+.grid{display:flex;flex-wrap:wrap;gap:12px}
+.card{background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:10px;width:calc(50% - 12px);box-sizing:border-box}
+.card img{width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px;cursor:pointer}
+#cartCount{background:#222;color:#fff;font-size:12px;padding:4px 8px;border-radius:999px}
+#cartView{display:none;background:#fff;padding:12px;border-radius:8px;border:1px solid #ddd;margin-top:12px}
+.return-shop{position:fixed;right:16px;bottom:18px;background:#007bff;color:#fff;padding:10px 12px;border-radius:8px;cursor:pointer;z-index:9999}
 @media(min-width:900px){ .card{width:calc(25% - 12px)} }
 
-/* Description popup */
-.description-popup {
-  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  background:#fff; padding:20px; max-width:400px; max-height:80%; overflow:auto;
-  box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:9999; display:none;
+/* PRODUCT MODAL */
+#productModal{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.6);
+  z-index:10000;
+  justify-content:center;
+  align-items:center;
 }
-.description-popup h3 { margin-top:0 }
-.description-popup img { width:100%; height:auto; margin-bottom:12px; border-radius:6px; }
-.description-popup button { margin-top:12px; }
+#productModalContent{
+  background:#fff;
+  max-width:420px;
+  width:90%;
+  padding:16px;
+  border-radius:10px;
+  max-height:80vh;
+  overflow:auto;
+}
+#productModalContent img{
+  width:100%;
+  border-radius:8px;
+  margin-bottom:10px;
+}
 </style>
 </head>
 <body>
@@ -49,104 +64,102 @@ h1 { font-size:20px; margin:0 }
 
 <button class="return-shop" onclick="showCategories()">🛍️ Shop</button>
 
-<!-- Description popup -->
-<div class="description-popup" id="descPopup">
-  <h3 id="descTitle"></h3>
-  <img id="descImage" src="">
-  <div id="descText"></div>
-  <button class="btn" onclick="closeDesc()">Close</button>
+<!-- PRODUCT MODAL -->
+<div id="productModal">
+  <div id="productModalContent">
+    <h3 id="modalTitle"></h3>
+    <img id="modalImage">
+    <div id="modalDescription"></div>
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>
+  </div>
 </div>
 
 <script>
-let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-let currentProducts = {}; // store products by ID
+/* CONFIG — PROXY REQUIRED */
+const SITE="https://ross.lrbcloud.co.za";
+let cart=JSON.parse(localStorage.getItem("cart")||"[]");
+let productCache={};
 
-function saveCart(){
-  localStorage.setItem("cart", JSON.stringify(cart));
-  document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.qty,0);
-}
-
-function money(v){ return "R " + Number(v||0).toFixed(2); }
+/* UTIL */
+function money(v){return "R "+Number(v||0).toFixed(2);}
+function saveCart(){localStorage.setItem("cart",JSON.stringify(cart)); updateCartCount();}
+function updateCartCount(){document.getElementById("cartCount").innerText=cart.reduce((s,i)=>s+i.qty,0);}
 
 /* CATEGORIES */
 async function showCategories(){
   document.getElementById("cartView").style.display="none";
-  const main = document.getElementById("main");
-  main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
+  document.getElementById("main").innerHTML="<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
 
-  const r = await fetch("/api/categories"); // proxy endpoint
-  const cats = await r.json();
-  document.getElementById("cats").innerHTML = cats.filter(c=>c.count>0)
-    .map(c=>`
+  const r=await fetch("/api/categories");
+  const cats=await r.json();
+  const catGrid=document.getElementById("cats");
+  catGrid.innerHTML="";
+  cats.filter(c=>c.count>0).forEach(c=>{
+    catGrid.innerHTML+=`
       <div class="card">
-        <img src="${c.image?.src||''}" onclick="alert('Category: ${c.name}')">
+        <img src="${c.image?.src||''}">
         <strong>${c.name}</strong>
+        <div class="small">Products: ${c.count}</div>
         <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
-      </div>
-    `).join("");
+      </div>`;
+  });
 }
 
 /* PRODUCTS */
 async function showProducts(id,name){
   document.getElementById("cartView").style.display="none";
-  const main = document.getElementById("main");
-  main.innerHTML = `<h2>${name}</h2><div class="grid" id="prods">Loading...</div>`;
-
-  const r = await fetch(`/api/products?category=${id}`); // proxy endpoint
-  const prods = await r.json();
-  
-  // store products in currentProducts
-  currentProducts = {};
-  prods.forEach(p => { currentProducts[p.id] = p; });
-
-  document.getElementById("prods").innerHTML = prods.map(p=>`
-    <div class="card">
-      <img src="${p.images[0]?.src||''}" onclick="showDesc(${p.id})">
-      <strong>${p.name}</strong>
-      <div>${money(p.price)}</div>
-      <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
-    </div>
-  `).join("");
+  document.getElementById("main").innerHTML=`<h2>${name}</h2><div class='grid' id='prods'>Loading...</div>`;
+  const r=await fetch(`/api/products?category=${id}`);
+  const prods=await r.json();
+  const prodGrid=document.getElementById("prods");
+  prodGrid.innerHTML="";
+  prods.forEach(p=>{
+    productCache[p.id]=p;
+    prodGrid.innerHTML+=`
+      <div class="card">
+        <img src="${p.images[0]?.src||''}" onclick="openModal(${p.id})">
+        <strong>${p.name}</strong>
+        <div>${money(p.price)}</div>
+        <button class="btn" onclick="addToCart(${p.id},'${p.name}',${p.price||0})">Add</button>
+      </div>`;
+  });
 }
 
-/* SHOW DESCRIPTION safely */
-function showDesc(id){
-  const p = currentProducts[id];
+/* PRODUCT MODAL */
+function openModal(id){
+  const p=productCache[id];
   if(!p) return;
-  document.getElementById("descTitle").innerText = p.name;
-  document.getElementById("descImage").src = p.images[0]?.src || '';
-  document.getElementById("descText").innerHTML = p.description; // safe HTML
-  document.getElementById("descPopup").style.display = "block";
+  document.getElementById("modalTitle").innerText=p.name;
+  document.getElementById("modalImage").src=p.images[0]?.src||'';
+  document.getElementById("modalDescription").innerHTML=p.description||"No description available.";
+  document.getElementById("productModal").style.display="flex";
 }
-
-function closeDesc(){
-  document.getElementById("descPopup").style.display = "none";
-}
+function closeModal(){document.getElementById("productModal").style.display="none";}
 
 /* CART */
-function add(id,name,price){
-  const item = cart.find(i=>i.id===id);
-  if(item) item.qty++;
-  else cart.push({id,name,price,qty:1});
+function addToCart(id,name,price){
+  const e=cart.find(i=>i.id===id);
+  e?e.qty++:cart.push({id,name,price,qty:1});
   saveCart();
-  alert(name+" added");
+  alert(`${name} added`);
 }
-
 function showCart(){
   document.getElementById("main").innerHTML="";
   document.getElementById("cartView").style.display="block";
-  document.getElementById("cartItems").innerHTML = cart.length
-    ? cart.map(i=>`<div>${i.name} × ${i.qty}</div>`).join("")
+  document.getElementById("cartItems").innerHTML=cart.length
+    ? cart.map(i=>`<p>${i.name} × ${i.qty}</p>`).join("")
     : "<p>Cart empty</p>";
 }
-
 function checkout(){
   if(!cart.length) return alert("Cart empty");
-  const ids = cart.map(i=>i.id).join(",");
+  const ids=cart.map(i=>i.id).join(",");
   cart=[]; saveCart();
-  location.href = "https://ross.lrbcloud.co.za/cart/?add-to-cart=" + ids;
+  location.href=`${SITE}/cart/?add-to-cart=${ids}`;
 }
 
+/* INIT */
 saveCart();
 showCategories();
 </script>
