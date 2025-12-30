@@ -6,20 +6,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
 body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#f5f6f8 }
-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
 h1 { font-size:20px; margin:0 }
 .btn { background:#ff6600; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
 .ghost { background:#ddd; color:#333 }
 .grid { display:flex; flex-wrap:wrap; gap:12px }
 .card { background:#fff; border:1px solid #e3e3e3; border-radius:8px; padding:10px; width:calc(50% - 12px); box-sizing:border-box }
-.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px }
-#cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px; margin-left:8px }
+.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer }
+#cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
 #main { min-height:60vh }
 #cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd; margin-top:12px }
-.return-shop { position:fixed; right:16px; bottom:18px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px; cursor:pointer; z-index:9999; }
-@media(min-width:900px) { .card { width:calc(25% - 12px) } }
+.return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px; cursor:pointer }
+@media(min-width:900px){ .card{width:calc(25% - 12px)} }
 </style>
 </head>
+
 <body>
 
 <header>
@@ -35,100 +36,92 @@ h1 { font-size:20px; margin:0 }
 <div id="cartView">
   <h3>Your Cart</h3>
   <div id="cartItems"></div>
-  <button class="btn full-width" onclick="proceedToCheckout()">Proceed to Checkout</button>
+  <button class="btn" onclick="checkout()">Checkout</button>
 </div>
 
-<button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
+<button class="return-shop" onclick="showCategories()">🛍️ Shop</button>
 
 <script>
-/* CONFIG */
-const PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
+/* PROXY CONFIG */
+const PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev"; // Your Cloudflare Worker URL
 
-/* STATE */
+/* CART */
 let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-
-/* UTIL */
 function saveCart() {
   localStorage.setItem("cart", JSON.stringify(cart));
-  cartCount.innerText = cart.reduce((s,i)=>s+i.quantity,0);
+  document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.qty,0);
 }
-function currency(v){return "R "+Number(v||0).toFixed(2);}
+function money(v){ return "R " + Number(v||0).toFixed(2); }
 
 /* LOAD CATEGORIES */
-async function showCategories(){
-  cartView.style.display="none";
-  main.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  
+async function showCategories() {
+  document.getElementById("cartView").style.display = "none";
+  const main = document.getElementById("main");
+  main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
+
   try {
-    const res = await fetch(`${PROXY}?endpoint=products/categories?per_page=100`);
-    const cats = await res.json();
-
-    if (cats.error) throw new Error(cats.error);
-
-    const catGrid = document.getElementById("catGrid");
-    catGrid.innerHTML = "";
-    cats.forEach(c => {
-      if(c.count>0){
-        catGrid.innerHTML += `
-          <div class="card">
-            <img src="${c.image?.src||''}">
-            <strong>${c.name}</strong>
-            <div class="small">Products: ${c.count}</div>
-            <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
-          </div>`;
-      }
-    });
-  } catch(e){
-    document.getElementById("catGrid").innerHTML = `<p style="color:red;">Failed to load categories: ${e.message}</p>`;
+    const r = await fetch(`${PROXY}/ams-categories`);
+    const cats = await r.json();
+    document.getElementById("cats").innerHTML = cats
+      .filter(c => c.count>0)
+      .map(c => `
+        <div class="card">
+          <img src="${c.image?.src||""}">
+          <strong>${c.name}</strong>
+          <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
+        </div>
+      `).join("");
+  } catch(e) {
+    document.getElementById("cats").innerHTML = "<p style='color:red;'>Failed to load categories.</p>";
+    console.error(e);
   }
 }
 
 /* LOAD PRODUCTS */
-async function showProducts(catId, catName){
-  cartView.style.display="none";
-  main.innerHTML = `<h2>${catName}</h2><div class='grid' id='prodGrid'>Loading...</div>`;
-  
+async function showProducts(id,name) {
+  document.getElementById("cartView").style.display = "none";
+  const main = document.getElementById("main");
+  main.innerHTML = `<h2>${name}</h2><div class="grid" id="prods">Loading...</div>`;
+
   try {
-    const res = await fetch(`${PROXY}?endpoint=products?category=${catId}&per_page=100`);
-    const prods = await res.json();
-
-    if (prods.error) throw new Error(prods.error);
-
-    const prodGrid = document.getElementById("prodGrid");
-    prodGrid.innerHTML = "";
-    prods.forEach(p=>{
-      prodGrid.innerHTML += `
-        <div class="card">
-          <img src="${p.images[0]?.src||''}">
-          <strong>${p.name}</strong>
-          <div class="small">${currency(p.price)}</div>
-          <button class="btn" onclick="addToCart(${p.id},'${p.name}',${p.price||0})">Add to Cart</button>
-        </div>`;
-    });
-  } catch(e){
-    document.getElementById("prodGrid").innerHTML = `<p style="color:red;">Failed to load products: ${e.message}</p>`;
+    const r = await fetch(`${PROXY}/ams-product-search?category_id=${id}`);
+    const prods = await r.json();
+    document.getElementById("prods").innerHTML = prods.map(p => `
+      <div class="card">
+        <img src="${p.images[0]?.src||""}">
+        <strong>${p.name}</strong>
+        <div>${money(p.price)}</div>
+        <button class="btn" onclick="add(${p.id},'${p.name}',${p.price||0})">Add</button>
+      </div>
+    `).join("");
+  } catch(e) {
+    document.getElementById("prods").innerHTML = "<p style='color:red;'>Failed to load products.</p>";
+    console.error(e);
   }
 }
 
-/* CART */
-function addToCart(id,name,price){
+/* CART FUNCTIONS */
+function add(id,name,price){
   const item = cart.find(i=>i.id===id);
-  item?item.quantity++:cart.push({id,name,price,quantity:1});
+  if(item) item.qty++;
+  else cart.push({id,name,price,qty:1});
   saveCart();
-  alert(name+" added to cart");
+  alert(name+" added");
 }
 
 function showCart(){
-  main.innerHTML = "";
-  cartView.style.display = "block";
-  cartItems.innerHTML = cart.length
-    ? cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("")
-    : "<p>Your cart is empty.</p>";
+  document.getElementById("main").innerHTML="";
+  document.getElementById("cartView").style.display="block";
+  document.getElementById("cartItems").innerHTML = cart.length
+    ? cart.map(i=>`<div>${i.name} × ${i.qty}</div>`).join("")
+    : "<p>Cart empty</p>";
 }
 
-function proceedToCheckout(){
-  if(!cart.length) return;
-  location.href = `https://ross.lrbcloud.co.za/cart/?add-to-cart=${cart.map(i=>i.id).join(",")}&fromApp=true`;
+function checkout(){
+  if(!cart.length) return alert("Cart empty");
+  const ids = cart.map(i=>i.id).join(",");
+  cart=[]; saveCart();
+  location.href = `https://ross.lrbcloud.co.za/cart/?add-to-cart=${ids}`;
 }
 
 /* INIT */
