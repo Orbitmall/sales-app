@@ -99,6 +99,12 @@ const productCache = {}; // 🚀 CACHE PRODUCTS
 function currency(v){return v?parseFloat(v).toFixed(2):"-";}
 function updateCartCount(){cartCount.innerText=cart.reduce((s,i)=>s+i.quantity,0);}
 
+/* API HELPER */
+async function api(path){
+  const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
+  if(!res.ok) throw new Error("API error");
+  return res.json();
+
 /* CATEGORIES */
 async function showCategories(){
   cartView.style.display="none";
@@ -182,4 +188,3 @@ showCategories();
 
 </body>
 </html>
-
