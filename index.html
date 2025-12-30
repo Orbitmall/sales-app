@@ -15,13 +15,15 @@ h1 { font-size:20px; margin:0 }
 .card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer }
 #cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
 #cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd }
+.cart-line { display:flex; gap:8px; border-bottom:1px solid #eee; padding:8px 0 }
+.cart-line img { width:70px; height:70px; object-fit:cover; border-radius:6px }
 .return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px }
 @media(min-width:900px){ .card{width:calc(25% - 12px)} }
 
 /* Description popup */
 .description-popup {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  background:#fff; padding:20px; max-width:400px; max-height:80%; overflow:auto;
+  background:#fff; padding:20px; border-radius:8px; max-width:400px; max-height:80%; overflow:auto;
   box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:9999; display:none;
 }
 .description-popup h3 { margin-top:0 }
@@ -29,6 +31,7 @@ h1 { font-size:20px; margin:0 }
 .description-popup button { margin-top:12px; }
 </style>
 </head>
+
 <body>
 
 <header>
@@ -59,7 +62,6 @@ h1 { font-size:20px; margin:0 }
 
 <script>
 let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-let currentProducts = {}; // store products by ID
 
 function saveCart(){
   localStorage.setItem("cart", JSON.stringify(cart));
@@ -76,14 +78,14 @@ async function showCategories(){
 
   const r = await fetch("/api/categories"); // proxy endpoint
   const cats = await r.json();
-  document.getElementById("cats").innerHTML = cats.filter(c=>c.count>0)
-    .map(c=>`
+  const html = cats.filter(c=>c.count>0).map(c=>`
       <div class="card">
         <img src="${c.image?.src||''}" onclick="alert('Category: ${c.name}')">
         <strong>${c.name}</strong>
         <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
       </div>
     `).join("");
+  document.getElementById("cats").innerHTML = html;
 }
 
 /* PRODUCTS */
@@ -94,28 +96,27 @@ async function showProducts(id,name){
 
   const r = await fetch(`/api/products?category=${id}`); // proxy endpoint
   const prods = await r.json();
-  
-  // store products in currentProducts
-  currentProducts = {};
-  prods.forEach(p => { currentProducts[p.id] = p; });
 
-  document.getElementById("prods").innerHTML = prods.map(p=>`
+  const html = prods.map(p=>`
     <div class="card">
-      <img src="${p.images[0]?.src||''}" onclick="showDesc(${p.id})">
+      <img src="${p.images[0]?.src||''}" 
+           data-name="${p.name}" 
+           data-img="${p.images[0]?.src||''}" 
+           data-desc="${p.description.replace(/"/g,'&quot;')}" 
+           onclick="showDescFromData(this)">
       <strong>${p.name}</strong>
       <div>${money(p.price)}</div>
       <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
     </div>
   `).join("");
+  document.getElementById("prods").innerHTML = html;
 }
 
-/* SHOW DESCRIPTION safely */
-function showDesc(id){
-  const p = currentProducts[id];
-  if(!p) return;
-  document.getElementById("descTitle").innerText = p.name;
-  document.getElementById("descImage").src = p.images[0]?.src || '';
-  document.getElementById("descText").innerHTML = p.description; // safe HTML
+/* SHOW DESCRIPTION from dataset */
+function showDescFromData(el){
+  document.getElementById("descTitle").innerText = el.dataset.name;
+  document.getElementById("descImage").src = el.dataset.img;
+  document.getElementById("descText").innerHTML = el.dataset.desc;
   document.getElementById("descPopup").style.display = "block";
 }
 
