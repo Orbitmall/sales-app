@@ -88,81 +88,75 @@ function updateCartCount(){cartCount.innerText=cart.reduce((s,i)=>s+i.quantity,0
 
 /* API HELPER */
 async function api(path){
-  try {
-    const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
-    console.log("Fetching:", path, res.status);
-    if(!res.ok) throw new Error("API error: "+res.status);
-    return await res.json();
-  } catch(e){
-    console.error("API fetch failed:", e);
-    throw e;
-  }
+  const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
+  if(!res.ok) throw new Error("API error");
+  return res.json();
 }
 
 /* CATEGORIES */
 async function showCategories(){
   cartView.style.display="none";
-  main.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
+  main.innerHTML="<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
   const catGrid = document.getElementById('catGrid');
   try {
     const cats = await api("/products/categories?per_page=100");
-    catGrid.innerHTML = "";
-    cats.forEach(c => {
-      if(c.count > 0){
-        const imgSrc = (c.image && c.image.src) ? c.image.src : "";
-        catGrid.innerHTML += `
-          <div class="card">
-            <img src="${imgSrc}" alt="${c.name}">
-            <strong>${c.name}</strong>
-            <div class="small">Products: ${c.count}</div>
-            <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
-          </div>`;
+    catGrid.innerHTML="";
+    cats.forEach(c=>{
+      if(c.count>0){
+        catGrid.innerHTML+=`
+        <div class="card">
+          <img src="${c.image?.src||""}">
+          <strong>${c.name}</strong>
+          <div class="small">Products: ${c.count}</div>
+          <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
+        </div>`;
       }
     });
   } catch(e){
-    catGrid.innerHTML = "<p>Error loading categories.</p>";
+    catGrid.innerHTML="<p>Error loading categories.</p>";
+    console.error(e);
   }
 }
 
 /* PRODUCTS */
-async function showProducts(id, name){
+async function showProducts(id,name){
   cartView.style.display="none";
-  main.innerHTML = `<h2>${name}</h2><div class='grid' id='prodGrid'>Loading...</div>`;
+  main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid">Loading...</div>`;
   const prodGrid = document.getElementById('prodGrid');
   try {
     const prods = await api(`/products?category=${id}&per_page=100`);
-    prodGrid.innerHTML = "";
-    prods.forEach(p => {
-      productCache[p.id] = p;
-      const imgSrc = (p.images && p.images[0] && p.images[0].src) ? p.images[0].src : "";
-      prodGrid.innerHTML += `
-        <div class="card product-card">
-          <img src="${imgSrc}" alt="${p.name}" onclick="openModal(${p.id})">
-          <strong>${p.name}</strong>
-          <div class="small">R ${currency(p.price)}</div>
-          <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price || 0})">Add to Cart</button>
-        </div>`;
+    prodGrid.innerHTML="";
+    prods.forEach(p=>{
+      productCache[p.id]=p;
+      prodGrid.innerHTML+=`
+      <div class="card product-card">
+        <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
+        <strong>${p.name}</strong>
+        <div class="small">R ${currency(p.price)}</div>
+        <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price||0})">Add to Cart</button>
+      </div>`;
     });
   } catch(e){
-    prodGrid.innerHTML = "<p>Error loading products.</p>";
+    prodGrid.innerHTML="<p>Error loading products.</p>";
+    console.error(e);
   }
 }
 
 /* MODAL */
 function openModal(id){
-  const p = productCache[id];
+  const p=productCache[id];
   if(!p) return;
-  modalTitle.innerText = p.name;
-  modalImage.src = (p.images && p.images[0] && p.images[0].src) ? p.images[0].src : "";
-  modalDescription.innerHTML = p.description || "No description available.";
-  productModal.style.display = "flex";
+  modalTitle.innerText=p.name;
+  modalImage.src=p.images[0]?.src||"";
+  modalDescription.innerHTML=p.description||"No description available.";
+  productModal.style.display="flex";
 }
-function closeModal(){productModal.style.display = "none";}
+function closeModal(){productModal.style.display="none";}
 
 /* CART */
 function addToCart(id,name,price){
   const e=cart.find(i=>i.id===id);
-  e ? e.quantity++ : cart.push({id,name,price,quantity:1});
+  e?e.quantity++:cart.push({id,name,price,quantity:1});
   saveCart();
 }
 function showCart(){
