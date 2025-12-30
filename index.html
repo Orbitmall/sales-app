@@ -19,15 +19,12 @@ h1 { font-size:20px; margin:0 }
 .cart-line img { width:70px; height:70px; object-fit:cover; border-radius:6px }
 .return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px }
 @media(min-width:900px){ .card{width:calc(25% - 12px)} }
-
-/* Description popup */
 .description-popup {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  background:#fff; padding:20px; border-radius:8px; max-width:400px; max-height:80%; overflow:auto;
-  box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:9999; display:none;
+  background:#fff; padding:20px; border-radius:8px; max-width:400px; box-shadow:0 4px 15px rgba(0,0,0,0.3);
+  z-index:9999; display:none;
 }
 .description-popup h3 { margin-top:0 }
-.description-popup img { width:100%; height:auto; margin-bottom:12px; border-radius:6px; }
 .description-popup button { margin-top:12px; }
 </style>
 </head>
@@ -52,11 +49,9 @@ h1 { font-size:20px; margin:0 }
 
 <button class="return-shop" onclick="showCategories()">🛍️ Shop</button>
 
-<!-- Description popup -->
 <div class="description-popup" id="descPopup">
   <h3 id="descTitle"></h3>
-  <img id="descImage" src="">
-  <div id="descText"></div>
+  <p id="descText"></p>
   <button class="btn" onclick="closeDesc()">Close</button>
 </div>
 
@@ -99,7 +94,7 @@ async function showProducts(id,name){
   const prods = await r.json();
   document.getElementById("prods").innerHTML = prods.map(p=>`
     <div class="card">
-      <img src="${p.images[0]?.src||''}" onclick="showDesc('${p.name}','${p.images[0]?.src||''}','${p.description.replace(/'/g,'\\\'')}')">
+      <img src="${p.images[0]?.src||''}" onclick="showDesc('${p.name}','${p.description.replace(/'/g,'\\\'')}')">
       <strong>${p.name}</strong>
       <div>${money(p.price)}</div>
       <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
@@ -107,10 +102,9 @@ async function showProducts(id,name){
   `).join("");
 }
 
-/* SHOW DESCRIPTION */
-function showDesc(name, img, desc){
+/* PRODUCT DESCRIPTION */
+function showDesc(name,desc){
   document.getElementById("descTitle").innerText = name;
-  document.getElementById("descImage").src = img;
   document.getElementById("descText").innerHTML = desc;
   document.getElementById("descPopup").style.display = "block";
 }
