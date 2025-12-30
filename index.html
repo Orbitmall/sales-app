@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <title>Sales App</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+
 <style>
   body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f5f6f8}
   header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -12,7 +13,7 @@
   .ghost{background:#ddd;color:#333}
   .grid{display:flex;flex-wrap:wrap;gap:12px}
   .card{background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:10px;width:calc(50% - 12px);box-sizing:border-box}
-  .card img{width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px}
+  .card img{width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px;cursor:pointer}
   .product-card{width:calc(50% - 12px)}
   #cartCount{background:#222;color:#fff;font-size:12px;padding:4px 8px;border-radius:999px;margin-left:8px}
   #main{min-height:60vh}
@@ -21,16 +22,40 @@
   .cart-line img{width:70px;height:70px;object-fit:cover;border-radius:6px}
   .qtyCtrl{display:flex;gap:6px;align-items:center}
   input[type="number"]{width:64px;padding:6px}
-  .form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
   .small{font-size:13px;color:#666}
-  footer{margin-top:18px}
-  .full-width{width:100%}
   .return-shop{
-    position:fixed;right:16px;bottom:18px;background:#007bff;color:#fff;padding:10px 12px;border-radius:8px;cursor:pointer;z-index:9999;
+    position:fixed;right:16px;bottom:18px;background:#007bff;color:#fff;
+    padding:10px 12px;border-radius:8px;cursor:pointer;z-index:9999;
   }
   @media(min-width:900px){ .card, .product-card{width:calc(25% - 12px)} }
+
+  /* PRODUCT MODAL */
+  #productModal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.6);
+    z-index:10000;
+    justify-content:center;
+    align-items:center;
+  }
+  #productModalContent{
+    background:#fff;
+    width:90%;
+    max-width:420px;
+    padding:16px;
+    border-radius:10px;
+    max-height:80vh;
+    overflow:auto;
+  }
+  #productModalContent img{
+    width:100%;
+    border-radius:8px;
+    margin-bottom:10px;
+  }
 </style>
 </head>
+
 <body>
 
 <header>
@@ -41,32 +66,28 @@
   </div>
 </header>
 
-<!-- main content -->
 <div id="main"></div>
 
-<!-- cart view (in-app) -->
 <div id="cartView">
   <h3>Your Cart</h3>
   <div id="cartItems"></div>
 
-  <div style="margin-top:10px;">
-    <button class="btn" onclick="clearCart()">Clear Cart</button>
-  </div>
-
-  <hr style="margin:12px 0"/>
-
-  <div style="margin-top:10px;">
-    <button class="btn full-width" onclick="proceedToCheckout()">Proceed to Checkout</button>
-  </div>
-
-  <div id="orderResult" style="margin-top:12px;display:none"></div>
+  <button class="btn full-width" onclick="proceedToCheckout()">Proceed to Checkout</button>
 </div>
 
-<footer id="footer" style="font-size:13px;color:#666;margin-top:18px">
-  App powered by your WooCommerce store.
-</footer>
+<button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
 
-<button class="return-shop" onclick="showCategories()" title="Return to Shop">🛍️ Return to Shop</button>
+<!-- PRODUCT DESCRIPTION MODAL -->
+<div id="productModal">
+  <div id="productModalContent">
+    <h3 id="modalTitle"></h3>
+    <img id="modalImage">
+    <div id="modalDescription" class="small"></div>
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* CONFIG */
@@ -78,184 +99,89 @@ const API_ROOT = SITE + "/wp-json/wc/v3";
 /* STATE */
 const CART_KEY = "app24_local_cart_v1";
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+const productCache = {}; // 🚀 SPEED CACHE
 
 /* UTIL */
 function saveCart(){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); updateCartCount(); }
-function updateCartCount(){ document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.quantity,0); }
-function currency(v){ return (v==null||v==="")? "-" : parseFloat(v).toFixed(2); }
+function updateCartCount(){ cartCount.innerText = cart.reduce((s,i)=>s+i.quantity,0); }
+function currency(v){ return v ? parseFloat(v).toFixed(2) : "-"; }
 
-/* CATEGORIES / PRODUCTS */
+/* CATEGORIES */
 async function showCategories(){
-  document.getElementById("cartView").style.display = "none";
-  const main = document.getElementById("main");
+  cartView.style.display = "none";
   main.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  try{
-    const res = await fetch(`${API_ROOT}/products/categories?per_page=100&consumer_key=${CK}&consumer_secret=${CS}`);
-    if(!res.ok) throw new Error("Failed to load categories");
-    const cats = await res.json();
-    const grid = document.getElementById("catGrid");
-    grid.innerHTML = "";
-    cats.forEach(cat=>{
-      if(cat.count>0){
-        const d = document.createElement("div"); d.className="card";
-        d.innerHTML = `
-          <img src="${cat.image?cat.image.src:''}" alt="${cat.name}">
-          <strong>${cat.name}</strong>
-          <div class="small">Products: ${cat.count}</div>
-          <div style="margin-top:8px"><button class="btn" onclick="showProducts(${cat.id}, '${cat.name.replace(/'/g,'\\\'')}')">View</button></div>
-        `;
-        grid.appendChild(d);
-      }
-    });
-  }catch(err){
-    document.getElementById("main").innerHTML = "<p>Failed to load categories.</p>";
-    console.error(err);
-  }
-}
 
-async function showProducts(catId, catName){
-  document.getElementById("cartView").style.display = "none";
-  const main = document.getElementById("main");
-  main.innerHTML = `<h2>${catName}</h2><div class="grid" id="prodGrid">Loading...</div>`;
-  try{
-    const res = await fetch(`${API_ROOT}/products?category=${catId}&per_page=100&consumer_key=${CK}&consumer_secret=${CS}`);
-    if(!res.ok) throw new Error("Failed to load products");
-    const prods = await res.json();
-    const grid = document.getElementById("prodGrid");
-    grid.innerHTML = "";
-    prods.forEach(p=>{
-      const d = document.createElement("div"); d.className = "card product-card";
-      d.innerHTML = `
-        <img src="${p.images && p.images[0] ? p.images[0].src : ''}" alt="${p.name}">
-        <strong>${p.name}</strong>
-        <div class="small">R ${currency(p.price)}</div>
-        <div style="margin-top:8px">
-          <button class="btn" onclick="addToCartLocal(${p.id}, '${p.name.replace(/'/g,'\\\'')}', ${Number(p.price||0)})">Add to Cart</button>
-        </div>
-      `;
-      grid.appendChild(d);
-    });
-  }catch(err){
-    main.innerHTML = "<p>Failed to load products.</p>";
-    console.error(err);
-  }
-}
+  const res = await fetch(`${API_ROOT}/products/categories?per_page=100&consumer_key=${CK}&consumer_secret=${CS}`);
+  const cats = await res.json();
+  catGrid.innerHTML = "";
 
-/* CART (local) */
-function addToCartLocal(product_id, name, price){
-  const existing = cart.find(i=>i.id===product_id);
-  if(existing) existing.quantity++;
-  else cart.push({ id: product_id, name, price: Number(price||0), quantity: 1 });
-  saveCart();
-  showToast(Name + " added to cart!");
-}
-
-function showCart(){
-  document.getElementById("main").innerHTML = "";
-  document.getElementById("cartView").style.display = "block";
-  renderCartItems();
-}
-
-function renderCartItems(){
-  const container = document.getElementById("cartItems");
-  container.innerHTML = "";
-  if(cart.length===0){
-    container.innerHTML = "<p>Your cart is empty.</p>";
-    return;
-  }
-  cart.forEach((line, idx)=>{
-    const div = document.createElement("div"); div.className="cart-line";
-    div.innerHTML = `
-      <img src="" id="thumb-${idx}">
-      <div style="flex:1">
-        <div><strong>${line.name}</strong></div>
-        <div class="small">R ${currency(line.price)}</div>
-      </div>
-      <div style="text-align:right">
-        <div class="qtyCtrl">
-          <button onclick="changeQty(${idx}, -1)" class="ghost">-</button>
-          <input type="number" min="1" value="${line.quantity}" onchange="qtyInputChange(${idx}, this.value)" />
-          <button onclick="changeQty(${idx}, +1)" class="ghost">+</button>
-        </div>
-        <div style="margin-top:8px"><button class="ghost" onclick="removeLine(${idx})">Remove</button></div>
+  cats.forEach(c=>{
+    if(c.count>0){
+      catGrid.innerHTML += `
+      <div class="card">
+        <img src="${c.image?.src||""}">
+        <strong>${c.name}</strong>
+        <div class="small">Products: ${c.count}</div>
+        <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
       </div>`;
-    container.appendChild(div);
-
-    // thumbnail (best-effort)
-    (async ()=>{
-      try{
-        const res = await fetch(`${API_ROOT}/products/${line.id}?consumer_key=${CK}&consumer_secret=${CS}`);
-        if(res.ok){
-          const p = await res.json();
-          const img = p.images && p.images[0] ? p.images[0].src : "";
-          const el = document.getElementById(`thumb-${idx}`);
-          if(el && img) el.src = img;
-          else if(el) el.style.display = "none";
-        }
-      }catch(e){ /* ignore */ }
-    })();
+    }
   });
 }
 
-function changeQty(idx, delta){
-  cart[idx].quantity = Math.max(1, cart[idx].quantity + delta);
-  saveCart(); renderCartItems();
-}
-function qtyInputChange(idx, val){
-  const n = parseInt(val||0,10); if(isNaN(n)||n<1) return;
-  cart[idx].quantity = n; saveCart(); renderCartItems();
+/* PRODUCTS */
+async function showProducts(catId, catName){
+  cartView.style.display = "none";
+  main.innerHTML = `<h2>${catName}</h2><div class="grid" id="prodGrid">Loading...</div>`;
+
+  const res = await fetch(`${API_ROOT}/products?category=${catId}&per_page=100&consumer_key=${CK}&consumer_secret=${CS}`);
+  const prods = await res.json();
+  prodGrid.innerHTML = "";
+
+  prods.forEach(p=>{
+    productCache[p.id] = p; // CACHE PRODUCT
+
+    prodGrid.innerHTML += `
+    <div class="card product-card">
+      <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
+      <strong>${p.name}</strong>
+      <div class="small">R ${currency(p.price)}</div>
+      <button class="btn" onclick="addToCartLocal(${p.id},'${p.name.replace(/'/g,"\\'")}',${Number(p.price||0)})">Add to Cart</button>
+    </div>`;
+  });
 }
 
-function removeLine(idx){ cart.splice(idx,1); saveCart(); renderCartItems(); }
-function clearCart() {
-  cart = [];
+/* PRODUCT MODAL (INSTANT) */
+function openModal(id){
+  const p = productCache[id];
+  if(!p) return;
+
+  modalTitle.innerText = p.name;
+  modalImage.src = p.images[0]?.src || "";
+  modalDescription.innerHTML = p.description || "No description available.";
+  productModal.style.display = "flex";
+}
+function closeModal(){ productModal.style.display = "none"; }
+
+/* CART */
+function addToCartLocal(id,name,price){
+  const e = cart.find(i=>i.id===id);
+  e ? e.quantity++ : cart.push({id,name,price,quantity:1});
   saveCart();
-  renderCartItems();
-  showToast("🛒 Cart cleared!");
-}function removeLine(idx){ cart.splice(idx,1); saveCart(); renderCartItems(); }
-
-/* PROCEED TO CHECKOUT: redirect using add-to-cart ids (works without CORS)
-   Keeps layout and behavior; clears local app cart after redirect request is initiated.
-*/
-function proceedToCheckout() {
-  if (cart.length === 0) {
-    showToast("Your cart is empty");
-    return;
-  }
-  // Build comma-separated product IDs. WooCommerce supports multiple add-to-cart IDs separated by comma.
-  const ids = cart.map(i => i.id).join(",");
-
-  // Clear app cart immediately (we initiated sync/redirect)
-  cart = []; saveCart();
-
-  // Redirect to site with add-to-cart param and the fromApp flag so header/footer hide
-  // Using cart URL to ensure user lands on cart page (not homepage)
-  // Example final URL: https://ross.lrbcloud.co.za/cart/?add-to-cart=12,34,56&fromApp=true
-  const url = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
-  window.location.href = url;
 }
 
-function showToast(message) {
-  const toast = document.createElement('div');
-  toast.textContent = message;
-  toast.style.position = 'fixed';
-  toast.style.bottom = '80px';
-  toast.style.left = '50%';
-  toast.style.transform = 'translateX(-50%)';
-  toast.style.background = '#333';
-  toast.style.color = '#fff';
-  toast.style.padding = '10px 20px';
-  toast.style.borderRadius = '20px';
-  toast.style.fontSize = '14px';
-  toast.style.opacity = '0';
-  toast.style.transition = 'opacity 0.3s ease';
-  toast.style.zIndex = '9999';
-  document.body.appendChild(toast);
-  setTimeout(() => toast.style.opacity = '1', 100);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 2000);
+function showCart(){
+  main.innerHTML = "";
+  cartView.style.display = "block";
+  cartItems.innerHTML = cart.length
+    ? cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("")
+    : "<p>Your cart is empty.</p>";
+}
+
+function proceedToCheckout(){
+  if(!cart.length) return;
+  const ids = cart.map(i=>i.id).join(",");
+  cart = []; saveCart();
+  location.href = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
 }
 
 /* INIT */
@@ -263,30 +189,5 @@ updateCartCount();
 showCategories();
 </script>
 
-<!-- Remove old footer and add custom footer -->
-<style>
-#custom-footer {
-    text-align: center;
-    font-size: 14px;
-    padding: 10px 0;
-    color: #333;
-    font-weight: bold;
-}
-</style>
-
-<div id="custom-footer">Your World Of Shopping</div>
-
-<script>
-// Wait until the page fully loads
-window.addEventListener('DOMContentLoaded', () => {
-    // Remove any element containing "App powered by"
-    const poweredElements = document.querySelectorAll('body *');
-    poweredElements.forEach(el => {
-        if(el.innerText && el.innerText.includes('App powered by')) {
-            el.remove(); // completely remove it
-        }
-    });
-});
-</script>
 </body>
 </html>
