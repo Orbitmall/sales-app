@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <title>Sales App</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+
 <style>
   body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f5f6f8}
   header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -23,6 +24,8 @@
     padding:10px 12px;border-radius:8px;cursor:pointer;z-index:9999;
   }
   @media(min-width:900px){ .card,.product-card{width:calc(25% - 12px)} }
+
+  /* MODAL */
   #productModal{
     display:none;position:fixed;inset:0;
     background:rgba(0,0,0,.6);
@@ -36,6 +39,7 @@
   #productModalContent img{width:100%;border-radius:8px;margin-bottom:10px}
 </style>
 </head>
+
 <body>
 
 <header>
@@ -56,6 +60,7 @@
 
 <button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
 
+<!-- PRODUCT MODAL -->
 <div id="productModal">
   <div id="productModalContent">
     <h3 id="modalTitle"></h3>
@@ -70,19 +75,23 @@
 <script>
 const SITE = "https://ross.lrbcloud.co.za";
 const API_PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
+
+/* STATE */
 const CART_KEY = "app24_local_cart_v1";
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
 const productCache = {};
 
+/* UTIL */
 function currency(v){return v?parseFloat(v).toFixed(2):"-";}
-function saveCart(){localStorage.setItem(CART_KEY,JSON.stringify(cart)); updateCartCount();}
-function updateCartCount(){document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.quantity,0);}
+function saveCart(){localStorage.setItem(CART_KEY,JSON.stringify(cart));updateCartCount();}
+function updateCartCount(){cartCount.innerText=cart.reduce((s,i)=>s+i.quantity,0);}
 
+/* API HELPER */
 async function api(path){
   try {
     const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
     console.log("Fetching:", path, res.status);
-    if(!res.ok) throw new Error("API error "+res.status);
+    if(!res.ok) throw new Error("API error: "+res.status);
     return await res.json();
   } catch(e){
     console.error("API fetch failed:", e);
@@ -90,24 +99,23 @@ async function api(path){
   }
 }
 
+/* CATEGORIES */
 async function showCategories(){
-  const mainDiv = document.getElementById("main");
-  mainDiv.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-  const catGrid = document.getElementById("catGrid");
-  try{
+  cartView.style.display="none";
+  main.innerHTML = "<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
+  const catGrid = document.getElementById('catGrid');
+  try {
     const cats = await api("/products/categories?per_page=100");
-    console.log("Categories:", cats);
     catGrid.innerHTML = "";
-    cats.forEach(c=>{
-      if(c.count>0){
-        const imgSrc = (c.image && c.image.src)? c.image.src : "";
-        const nameSafe = c.name.replace(/'/g,"\\'");
+    cats.forEach(c => {
+      if(c.count > 0){
+        const imgSrc = (c.image && c.image.src) ? c.image.src : "";
         catGrid.innerHTML += `
           <div class="card">
             <img src="${imgSrc}" alt="${c.name}">
             <strong>${c.name}</strong>
             <div class="small">Products: ${c.count}</div>
-            <button class="btn" onclick="showProducts(${c.id},'${nameSafe}')">View</button>
+            <button class="btn" onclick="showProducts(${c.id},'${c.name.replace(/'/g,"\\'")}')">View</button>
           </div>`;
       }
     });
@@ -116,24 +124,23 @@ async function showCategories(){
   }
 }
 
-async function showProducts(id,name){
-  const mainDiv = document.getElementById("main");
-  mainDiv.innerHTML = `<h2>${name}</h2><div class='grid' id='prodGrid'>Loading...</div>`;
-  const prodGrid = document.getElementById("prodGrid");
-  try{
+/* PRODUCTS */
+async function showProducts(id, name){
+  cartView.style.display="none";
+  main.innerHTML = `<h2>${name}</h2><div class='grid' id='prodGrid'>Loading...</div>`;
+  const prodGrid = document.getElementById('prodGrid');
+  try {
     const prods = await api(`/products?category=${id}&per_page=100`);
-    console.log("Products:", prods);
     prodGrid.innerHTML = "";
-    prods.forEach(p=>{
+    prods.forEach(p => {
       productCache[p.id] = p;
-      const imgSrc = (p.images && p.images[0] && p.images[0].src)? p.images[0].src : "";
-      const nameSafe = p.name.replace(/'/g,"\\'");
+      const imgSrc = (p.images && p.images[0] && p.images[0].src) ? p.images[0].src : "";
       prodGrid.innerHTML += `
         <div class="card product-card">
           <img src="${imgSrc}" alt="${p.name}" onclick="openModal(${p.id})">
           <strong>${p.name}</strong>
           <div class="small">R ${currency(p.price)}</div>
-          <button class="btn" onclick="addToCart(${p.id},'${nameSafe}',${p.price || 0})">Add to Cart</button>
+          <button class="btn" onclick="addToCart(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price || 0})">Add to Cart</button>
         </div>`;
     });
   } catch(e){
@@ -141,43 +148,40 @@ async function showProducts(id,name){
   }
 }
 
+/* MODAL */
 function openModal(id){
   const p = productCache[id];
   if(!p) return;
-  document.getElementById("modalTitle").innerText = p.name;
-  document.getElementById("modalImage").src = (p.images && p.images[0] && p.images[0].src)? p.images[0].src : "";
-  document.getElementById("modalDescription").innerHTML = p.description || "No description available.";
-  document.getElementById("productModal").style.display = "flex";
+  modalTitle.innerText = p.name;
+  modalImage.src = (p.images && p.images[0] && p.images[0].src) ? p.images[0].src : "";
+  modalDescription.innerHTML = p.description || "No description available.";
+  productModal.style.display = "flex";
 }
+function closeModal(){productModal.style.display = "none";}
 
-function closeModal(){document.getElementById("productModal").style.display = "none";}
-
+/* CART */
 function addToCart(id,name,price){
-  const e = cart.find(i=>i.id===id);
+  const e=cart.find(i=>i.id===id);
   e ? e.quantity++ : cart.push({id,name,price,quantity:1});
   saveCart();
 }
-
 function showCart(){
-  document.getElementById("main").innerHTML = "";
-  const cartView = document.getElementById("cartView");
-  cartView.style.display = "block";
-  document.getElementById("cartItems").innerHTML = cart.length ? 
-    cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("") : "<p>Your cart is empty.</p>";
+  main.innerHTML="";
+  cartView.style.display="block";
+  cartItems.innerHTML=cart.length
+    ? cart.map(i=>`<p>${i.name} × ${i.quantity}</p>`).join("")
+    : "<p>Your cart is empty.</p>";
 }
-
 function proceedToCheckout(){
   if(!cart.length) return;
-  const ids = cart.map(i=>i.id).join(",");
+  const ids=cart.map(i=>i.id).join(",");
   cart=[]; saveCart();
-  location.href = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
+  location.href=`${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
 }
 
-/* INIT AFTER DOM LOAD */
-window.addEventListener("DOMContentLoaded", ()=>{
-  updateCartCount();
-  showCategories();
-});
+/* INIT */
+updateCartCount();
+showCategories();
 </script>
 
 </body>
