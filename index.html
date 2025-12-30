@@ -25,30 +25,17 @@
   }
   @media(min-width:900px){ .card,.product-card{width:calc(25% - 12px)} }
 
-  /* PRODUCT MODAL */
   #productModal{
-    display:none;
-    position:fixed;
-    inset:0;
+    display:none;position:fixed;inset:0;
     background:rgba(0,0,0,.6);
-    z-index:10000;
-    justify-content:center;
-    align-items:center;
+    z-index:10000;justify-content:center;align-items:center;
   }
   #productModalContent{
-    background:#fff;
-    width:90%;
-    max-width:420px;
-    padding:16px;
-    border-radius:10px;
-    max-height:80vh;
-    overflow:auto;
+    background:#fff;width:90%;max-width:420px;
+    padding:16px;border-radius:10px;
+    max-height:80vh;overflow:auto;
   }
-  #productModalContent img{
-    width:100%;
-    border-radius:8px;
-    margin-bottom:10px;
-  }
+  #productModalContent img{width:100%;border-radius:8px;margin-bottom:10px}
 </style>
 </head>
 
@@ -72,7 +59,6 @@
 
 <button class="return-shop" onclick="showCategories()">🛍️ Return to Shop</button>
 
-<!-- PRODUCT DESCRIPTION MODAL -->
 <div id="productModal">
   <div id="productModalContent">
     <h3 id="modalTitle"></h3>
@@ -85,23 +71,24 @@
 </div>
 
 <script>
-/* CONFIG (SAFE) */
+/* CONFIG */
 const SITE = "https://ross.lrbcloud.co.za";
 const API_PROXY = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
 
 /* STATE */
 const CART_KEY = "app24_local_cart_v1";
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
-const productCache = {}; // 🚀 speed cache
+const productCache = {};
 
 /* UTIL */
 function currency(v){return v?parseFloat(v).toFixed(2):"-";}
 function saveCart(){localStorage.setItem(CART_KEY,JSON.stringify(cart));updateCartCount();}
 function updateCartCount(){cartCount.innerText=cart.reduce((s,i)=>s+i.quantity,0);}
 
-/* API VIA PROXY */
+/* ✅ FIXED API CALL */
 async function api(path){
-  const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(path)}`);
+  const cleanPath = path.replace(/^\/+/,''); // 🔥 FIX
+  const res = await fetch(`${API_PROXY}?path=${encodeURIComponent(cleanPath)}`);
   if(!res.ok) throw new Error("API error");
   return res.json();
 }
@@ -110,10 +97,8 @@ async function api(path){
 async function showCategories(){
   cartView.style.display="none";
   main.innerHTML="<h2>Categories</h2><div class='grid' id='catGrid'>Loading...</div>";
-
-  const cats = await api("/products/categories?per_page=100");
+  const cats = await api("products/categories?per_page=100");
   catGrid.innerHTML="";
-
   cats.forEach(c=>{
     if(c.count>0){
       catGrid.innerHTML+=`
@@ -131,13 +116,10 @@ async function showCategories(){
 async function showProducts(id,name){
   cartView.style.display="none";
   main.innerHTML=`<h2>${name}</h2><div class="grid" id="prodGrid">Loading...</div>`;
-
-  const prods = await api(`/products?category=${id}&per_page=100`);
+  const prods = await api(`products?category=${id}&per_page=100`);
   prodGrid.innerHTML="";
-
   prods.forEach(p=>{
     productCache[p.id]=p;
-
     prodGrid.innerHTML+=`
     <div class="card product-card">
       <img src="${p.images[0]?.src||""}" onclick="openModal(${p.id})">
@@ -148,15 +130,14 @@ async function showProducts(id,name){
   });
 }
 
-/* PRODUCT MODAL (INSTANT) */
+/* MODAL */
 function openModal(id){
-  const p = productCache[id];
+  const p=productCache[id];
   if(!p) return;
-
-  modalTitle.innerText = p.name;
-  modalImage.src = p.images[0]?.src || "";
-  modalDescription.innerHTML = p.description || "No description available.";
-  productModal.style.display = "flex";
+  modalTitle.innerText=p.name;
+  modalImage.src=p.images[0]?.src||"";
+  modalDescription.innerHTML=p.description||"No description available.";
+  productModal.style.display="flex";
 }
 function closeModal(){productModal.style.display="none";}
 
@@ -177,9 +158,9 @@ function showCart(){
 
 function proceedToCheckout(){
   if(!cart.length) return;
-  const ids = cart.map(i=>i.id).join(",");
+  const ids=cart.map(i=>i.id).join(",");
   cart=[]; saveCart();
-  window.location.href = `${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
+  window.location.href=`${SITE}/cart/?add-to-cart=${ids}&fromApp=true`;
 }
 
 /* INIT */
