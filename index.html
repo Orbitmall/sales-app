@@ -44,17 +44,8 @@
 /* PROXY API */
 const API_ROOT = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
 
-/* CART */
-let cart = JSON.parse(localStorage.getItem("cart") || "[]");
-function saveCart(){
-  localStorage.setItem("cart", JSON.stringify(cart));
-  document.getElementById("cartCount").innerText = cart.reduce((s,i)=>s+i.qty,0);
-}
-function money(v){ return "R " + Number(v||0).toFixed(2); }
-
-/* LOAD CATEGORIES */
-async function showCategories(){
-  document.getElementById("cartView").style.display="none";
+async function showCategories() {
+  document.getElementById("cartView").style.display = "none";
   const main = document.getElementById("main");
   main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
 
@@ -62,20 +53,20 @@ async function showCategories(){
     const r = await fetch(`${API_ROOT}/wp-json/wc/v3/products/categories`);
     const cats = await r.json();
     document.getElementById("cats").innerHTML = cats
-      .filter(c=>c.count>0)
-      .map(c=>`
+      .filter(c => c.count > 0)
+      .map(c => `
         <div class="card">
-          <img src="${c.image?.src||''}">
+          <img src="${c.image?.src || ''}">
           <strong>${c.name}</strong>
           <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
         </div>
       `).join("");
   } catch(e) {
     document.getElementById("cats").innerHTML = "<p>Failed to load categories</p>";
-    console.error(e);
+    console.error("Category fetch failed:", e);
   }
 }
-
+    
 /* LOAD PRODUCTS */
 async function showProducts(id,name){
   document.getElementById("cartView").style.display="none";
@@ -129,3 +120,4 @@ showCategories();
 
 </body>
 </html>
+
