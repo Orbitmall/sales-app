@@ -1,23 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="utf-8">
 <title>Sales App</title>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#f5f6f8 }
-  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
-  h1 { font-size:20px; margin:0 }
-  .btn { background:#ff6600; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
-  .ghost { background:#ddd; color:#333 }
-  .grid { display:flex; flex-wrap:wrap; gap:12px }
-  .card { background:#fff; border:1px solid #e3e3e3; border-radius:8px; padding:10px; width:calc(50% - 12px); box-sizing:border-box }
-  .card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer }
-  #cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
-  #main { min-height:60vh }
-  #cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd; margin-top:12px }
-  .return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px; cursor:pointer }
-  @media(min-width:900px){ .card { width:calc(25% - 12px) } }
+body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#f5f6f8 }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+h1 { font-size:20px; margin:0 }
+.btn { background:#ff6600; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
+.ghost { background:#ddd; color:#333 }
+.grid { display:flex; flex-wrap:wrap; gap:12px }
+.card { background:#fff; border:1px solid #e3e3e3; border-radius:8px; padding:10px; width:calc(50% - 12px); box-sizing:border-box }
+.card img { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-bottom:8px }
+#cartCount { background:#222; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px }
+#cartView { display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid #ddd; margin-top:12px }
+.return-shop { position:fixed; bottom:16px; right:16px; background:#007bff; color:#fff; padding:10px 12px; border-radius:8px; cursor:pointer }
+@media(min-width:900px){ .card { width:calc(25% - 12px) } }
 </style>
 </head>
 <body>
@@ -35,38 +34,50 @@
 <div id="cartView">
   <h3>Your Cart</h3>
   <div id="cartItems"></div>
-  <button class="btn" onclick="checkout()">Checkout</button>
+  <button class="btn full-width" onclick="checkout()">Checkout</button>
 </div>
 
 <button class="return-shop" onclick="showCategories()">🛍️ Shop</button>
 
 <script>
-/* PROXY API */
 const API_ROOT = "https://woo-sales-proxy.hungryhoundaj.workers.dev";
 
-async function showCategories() {
-  document.getElementById("cartView").style.display = "none";
+/* CART */
+let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+
+function saveCart(){
+  localStorage.setItem("cart", JSON.stringify(cart));
+  document.getElementById("cartCount").innerText =
+    cart.reduce((s,i)=>s+i.qty,0);
+}
+
+function money(v){ return "R " + Number(v||0).toFixed(2); }
+
+/* LOAD CATEGORIES */
+async function showCategories(){
+  document.getElementById("cartView").style.display="none";
   const main = document.getElementById("main");
   main.innerHTML = "<h2>Categories</h2><div class='grid' id='cats'>Loading...</div>";
 
   try {
-    const r = await fetch(`${API_ROOT}/wp-json/wc/v3/products/categories`);
+    const r = await fetch(`${API_ROOT}/products/categories`);
     const cats = await r.json();
+    if(!Array.isArray(cats)) throw new Error("Invalid response");
     document.getElementById("cats").innerHTML = cats
-      .filter(c => c.count > 0)
-      .map(c => `
+      .filter(c=>c.count>0)
+      .map(c=>`
         <div class="card">
-          <img src="${c.image?.src || ''}">
+          <img src="${c.image?.src||''}">
           <strong>${c.name}</strong>
           <button class="btn" onclick="showProducts(${c.id},'${c.name}')">View</button>
         </div>
       `).join("");
   } catch(e) {
     document.getElementById("cats").innerHTML = "<p>Failed to load categories</p>";
-    console.error("Category fetch failed:", e);
+    console.error(e);
   }
 }
-    
+
 /* LOAD PRODUCTS */
 async function showProducts(id,name){
   document.getElementById("cartView").style.display="none";
@@ -74,8 +85,9 @@ async function showProducts(id,name){
   main.innerHTML = `<h2>${name}</h2><div class='grid' id='prods'>Loading...</div>`;
 
   try {
-    const r = await fetch(`${API_ROOT}/wp-json/wc/v3/products?category=${id}`);
+    const r = await fetch(`${API_ROOT}/products?category=${id}`);
     const prods = await r.json();
+    if(!Array.isArray(prods)) throw new Error("Invalid response");
     document.getElementById("prods").innerHTML = prods.map(p=>`
       <div class="card">
         <img src="${p.images[0]?.src||''}">
@@ -84,7 +96,7 @@ async function showProducts(id,name){
         <button class="btn" onclick="add(${p.id},'${p.name}',${p.price})">Add</button>
       </div>
     `).join("");
-  } catch(e){
+  } catch(e) {
     document.getElementById("prods").innerHTML = "<p>Failed to load products</p>";
     console.error(e);
   }
@@ -103,7 +115,7 @@ function showCart(){
   document.getElementById("main").innerHTML="";
   document.getElementById("cartView").style.display="block";
   document.getElementById("cartItems").innerHTML = cart.length
-    ? cart.map(i=>`<p>${i.name} × ${i.qty}</p>`).join("")
+    ? cart.map(i=>`<div>${i.name} × ${i.qty}</div>`).join("")
     : "<p>Cart empty</p>";
 }
 
@@ -111,13 +123,13 @@ function checkout(){
   if(!cart.length) return alert("Cart empty");
   const ids = cart.map(i=>i.id).join(",");
   cart=[]; saveCart();
-  location.href = "https://ross.lrbcloud.co.za/cart/?add-to-cart=" + ids;
+  location.href = `https://ross.lrbcloud.co.za/cart/?add-to-cart=${ids}`;
 }
 
+/* INIT */
 saveCart();
 showCategories();
 </script>
 
 </body>
 </html>
-
